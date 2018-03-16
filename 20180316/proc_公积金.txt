@@ -1,0 +1,54 @@
+CREATE PROCEDURE PROC_GJJMX_DATA (IN userid VARCHAR(50)) LANGUAGE SQL
+BEGIN
+  
+	DECLARE oTempChild VARCHAR(4000);
+  DECLARE oTemp VARCHAR(4000);
+  
+  select GROUP_CONCAT(orgnize.id) into oTempChild
+	from vip_common_dev.sb_sys_user suser 
+	join t_common_orgnize_user_responsibility uo on uo.user_id=suser.id
+	join t_common_orgnize orgnize on uo.orgnize_id=orgnize.id 
+	where suser.id=userid;
+
+	SET oTemp = oTempChild;
+  
+  WHILE oTempChild IS NOT NULL
+  DO
+	  SET oTemp = CONCAT(oTemp,',',oTempChild);
+	  SELECT GROUP_CONCAT(id) INTO oTempChild FROM t_common_orgnize WHERE FIND_IN_SET(parent_id,oTempChild) > 0;
+  END WHILE;
+  
+  select 
+	  empInfo.job_num as 参保人工号,
+	  concat(substr(accfundBase.fy_date,1,4),substr(accfundBase.fy_date,6,2)) as 参保月份,
+	  porgnize.name as 区域,
+	  orgnize.name as 门店,
+	  '' as 主体简称,
+	  empBase.name as 参保人,
+	  empBase.id_card as 身份证号,
+	  accfundSure.account as 公积金号,
+	  accfundBase.insurance_address_name as 参保地,
+	  itemA.company_base AS 公积金单位缴费基数,
+	  itemA.company_ratio AS 公积金单位缴费比例,
+	  itemA.company_amount AS 公积金单位缴费金额,
+	  itemA.personal_base AS 公积金个人缴费基数,
+	  itemA.personal_ratio AS 公积金个人缴费比例,
+	  itemA.personal_amount AS 公积金个人缴费金额,
+	  accfundBase.company_amount as 企业总金额,
+	  accfundBase.personal_amount as 个人总金额,
+	  accfundBase.total_amount as 合计总金额 
+	from t_emp_base empBase 
+	join t_settlement_bill bill on bill.name='深圳前海新煤电子商务有限公司_2018-03_结算单 0183'
+	join t_settlement_bill_accfund accfundBase on accfundBase.employee_id=empBase.id and accfundBase.settle_id=bill.id
+	LEFT JOIN t_settlement_bill_accfund_items itemA ON accfundBase.id=itemA.settlement_bill_pro_id
+	left join t_emp_info empInfo on empInfo.emp_id=empBase.id
+	left join t_emp_comp_history ech on ech.emp_id=empBase.id
+	left join t_common_orgnize orgnize on orgnize.id=ech.dept_id
+	left join t_common_orgnize porgnize on porgnize.id=orgnize.parent_id
+	LEFT JOIN (select employee_id,max(account) as account from t_welfare_emp_accfund_sure group by employee_id) accfundSure on accfundSure.employee_id=empBase.id
+	where FIND_IN_SET(orgnize.id,oTemp) > 0 ;
+	
+END
+
+
+

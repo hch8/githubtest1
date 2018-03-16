@@ -1,0 +1,48 @@
+CREATE PROCEDURE PROC_HZMX_DATA (IN userid VARCHAR(50)) LANGUAGE SQL
+BEGIN
+
+	DECLARE oTempChild VARCHAR(4000);
+  DECLARE oTemp VARCHAR(4000);
+  
+  select GROUP_CONCAT(orgnize.id) into oTempChild
+	from vip_common_dev.sb_sys_user suser 
+	join t_common_orgnize_user_responsibility uo on uo.user_id=suser.id
+	join t_common_orgnize orgnize on uo.orgnize_id=orgnize.id 
+	where suser.id=userid;
+
+	SET oTemp = oTempChild;
+  
+  WHILE oTempChild IS NOT NULL
+  DO
+	  SET oTemp = CONCAT(oTemp,',',oTempChild);
+	  SELECT GROUP_CONCAT(id) INTO oTempChild FROM t_common_orgnize WHERE FIND_IN_SET(parent_id,oTempChild) > 0;
+  END WHILE;
+  
+	select 
+	  empInfo.job_num as 参保人工号,
+	  porgnize.name as 区域,
+	  orgnize.name as 门店,
+	  '' as 主体简称,
+	  empBase.name as 参保人姓名,
+	  empBase.id_card as 身份证号,
+	  sum(coalesce(socialBase.company_amount,0)) as 社保单位,
+	  sum(coalesce(socialBase.personal_amount,0)) as 社保个人,
+	  sum(coalesce(accfundBase.company_amount,0)) as 公积金单位,
+	  sum(coalesce(accfundBase.personal_amount,0)) as 公积金个人,
+	  sum(coalesce(disability.total_amount,0)) as 残保金,
+	  sum(coalesce(expense.expense_amount,0)) as 服务费
+	from t_emp_base empBase 
+	join t_settlement_bill bill on bill.name='深圳前海新煤电子商务有限公司_2018-03_结算单 0183'
+	left join t_emp_info empInfo on empInfo.emp_id=empBase.id
+	left join t_emp_comp_history ech on ech.emp_id=empBase.id
+	left join t_common_orgnize orgnize on orgnize.id=ech.dept_id
+	left join t_common_orgnize porgnize on porgnize.id=orgnize.parent_id
+	left join (select settle_id,employee_id,sum(company_amount) company_amount,sum(personal_amount) personal_amount from t_settlement_bill_social group by settle_id,employee_id) socialBase on socialBase.employee_id=empBase.id and socialBase.settle_id=bill.id
+	left join (select settle_id,employee_id,sum(company_amount) company_amount,sum(personal_amount) personal_amount from t_settlement_bill_accfund group by settle_id,employee_id) accfundBase on accfundBase.employee_id=empBase.id and accfundBase.settle_id=bill.id
+	left join (select settle_id,employee_id,sum(total_amount) total_amount from t_settlement_bill_disability group by settle_id,employee_id) disability on disability.employee_id=empBase.id and disability.settle_id=bill.id
+	left join (select settle_id,employee_id,sum(expense_amount) expense_amount from t_settlement_bill_expense group by settle_id,employee_id) expense on expense.employee_id=empBase.id and expense.settle_id=bill.id
+	where (socialBase.employee_id is not null or accfundBase.employee_id is not null) and FIND_IN_SET(orgnize.id,oTemp) > 0
+  group by 参保人工号,区域,门店,参保人姓名,身份证号;
+	
+END
+
