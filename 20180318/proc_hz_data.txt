@@ -1,0 +1,106 @@
+CREATE PROCEDURE PROC_HZ_DATA (IN userid VARCHAR(50)) LANGUAGE SQL
+BEGIN
+	DECLARE oUserDeptId varchar(500);
+	DECLARE oFstDeptTmp varchar(500);
+  DECLARE oFstDeptId varchar(500);
+  DECLARE oChildIds varchar(4000);
+  
+	DECLARE oTempChild VARCHAR(4000);
+  DECLARE oTemp VARCHAR(4000);
+  
+  #---------程序开始----------------
+  # Step 1 获取用户的部门ID
+  select group_concat(orgnize.id) into oUserDeptId
+	from vip_common_dev.sb_sys_user suser 
+	join t_common_orgnize_user_responsibility uo on uo.user_id=suser.id
+	join t_common_orgnize orgnize on uo.orgnize_id=orgnize.id 
+	where suser.id=userid;
+  
+  # Step2 获取最顶级部门的ID
+  set oFstDeptTmp = oUserDeptId;
+  while oFstDeptTmp is not null
+  do
+    set oFstDeptId = oFstDeptTmp;
+  	select group_concat(orgnize.parent_id) into oFstDeptTmp from t_common_orgnize orgnize where FIND_IN_SET(id,oFstDeptTmp)>0;
+  end while;
+  
+  # Step 3 获取所有区域的ID和名称,插入临时表
+  select group_concat(id) into oChildIds from t_common_orgnize where FIND_IN_SET(parent_id,oFstDeptId)>0;
+  
+  drop table if exists dept_table_tmp;
+  create temporary table dept_table_tmp (
+		id varchar(50) primary key,
+		area_name varchar(50)
+	);
+	
+	drop table if exists dept_table;
+  create temporary table dept_table like dept_table_tmp;
+	
+	insert into dept_table select id,name from t_common_orgnize where FIND_IN_SET(id,oChildIds)>0;
+	
+	# Step 4 查询每个区域的子部门，插入临时表
+	while oChildIds is not null
+	do
+		insert into dept_table_tmp 
+		select orgnize.id,dept.area_name from t_common_orgnize orgnize
+		left join dept_table dept on dept.id=orgnize.parent_id
+		where FIND_IN_SET(orgnize.parent_id,oChildIds)>0;
+		
+		insert into dept_table select id,area_name from dept_table_tmp;
+		delete from dept_table_tmp;
+		
+		select group_concat(id) into oChildIds from t_common_orgnize where FIND_IN_SET(parent_id,oChildIds)>0;
+	end while;
+	
+  # Step 5 获取用户所在部门的所有子部门
+  select GROUP_CONCAT(orgnize.id) into oTempChild
+	from vip_common_dev.sb_sys_user suser 
+	join t_common_orgnize_user_responsibility uo on uo.user_id=suser.id
+	join t_common_orgnize orgnize on uo.orgnize_id=orgnize.id 
+	where suser.id=userid;
+
+	SET oTemp = oTempChild;
+  
+  WHILE oTempChild IS NOT NULL
+  DO
+	  SET oTemp = CONCAT(oTemp,',',oTempChild);
+	  SELECT GROUP_CONCAT(id) INTO oTempChild FROM t_common_orgnize WHERE FIND_IN_SET(parent_id,oTempChild) > 0;
+  END WHILE;
+  
+  # Step 6 获取最终数据
+  select 
+	  areatmp.area_name as 区域,
+	  orgnize.name as 门店,
+	  case when socialBase.employee_id is not null then concat(substr(socialBase.fy_date,1,4),substr(socialBase.fy_date,6,2))
+	  		 when accfundBase.employee_id is not null then concat(substr(accfundBase.fy_date,1,4),substr(accfundBase.fy_date,6,2))
+	  		end as 月份,
+	  '' as 主体简称,
+	  count(empBase.name) as 参保总人数,
+	  count(case when socialBase.employee_id is not null then empBase.name end) as 社保人数,
+	  max(concat(substr(socialBase.fy_date,1,4),substr(socialBase.fy_date,6,2))) as 社保月份,
+	  sum(coalesce(socialBase.company_amount,0)) as 社保单位,
+	  sum(coalesce(socialBase.personal_amount,0)) as 社保个人,
+	  count(case when accfundBase.employee_id is not null then empBase.name end) as 公积金人数,
+	  max(concat(substr(accfundBase.fy_date,1,4),substr(accfundBase.fy_date,6,2))) as 公积金月份,
+	  sum(coalesce(accfundBase.company_amount,0)) as 公积金单位,
+	  sum(coalesce(accfundBase.personal_amount,0)) as 公积金个人,
+	  sum(coalesce(disability.total_amount,0)) as 残保金,
+	  sum(coalesce(expense.expense_amount,0)) as 服务费
+	from t_emp_base empBase 
+	join t_settlement_bill bill on bill.name='深圳前海新煤电子商务有限公司_2018-03_结算单 0183'
+	left join t_emp_comp_history ech on ech.emp_id=empBase.id
+	left join t_common_orgnize orgnize on orgnize.id=ech.dept_id
+	left join dept_table areatmp on areatmp.id=orgnize.id
+	left join (select settle_id,employee_id,fy_date,sum(company_amount) company_amount,sum(personal_amount) personal_amount from t_settlement_bill_social group by settle_id,employee_id,fy_date) socialBase on socialBase.employee_id=empBase.id and socialBase.settle_id=bill.id
+	left join (select settle_id,employee_id,fy_date,sum(company_amount) company_amount,sum(personal_amount) personal_amount from t_settlement_bill_accfund group by settle_id,employee_id,fy_date) accfundBase on accfundBase.employee_id=empBase.id and accfundBase.settle_id=bill.id
+	left join (select settle_id,employee_id,fy_date,sum(total_amount) total_amount from t_settlement_bill_disability group by settle_id,employee_id,fy_date) disability on disability.employee_id=empBase.id and disability.settle_id=bill.id and (disability.fy_date=socialBase.fy_date or disability.fy_date=accfundBase.fy_date)
+	left join (select settle_id,employee_id,fy_date,sum(expense_amount) expense_amount from t_settlement_bill_expense group by settle_id,employee_id,fy_date) expense on expense.employee_id=empBase.id and expense.settle_id=bill.id and (disability.fy_date=socialBase.fy_date or disability.fy_date=accfundBase.fy_date)
+	where FIND_IN_SET(orgnize.id,oTemp) > 0 and ((socialBase.employee_id is not null and accfundBase.employee_id is not null and socialBase.fy_date=accfundBase.fy_date)
+		or (socialBase.employee_id is not null and accfundBase.employee_id is null)
+		or (socialBase.employee_id is null and accfundBase.employee_id is not null))
+	group by 区域,门店,月份;
+	
+END
+
+
+
