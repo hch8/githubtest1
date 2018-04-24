@@ -1,0 +1,100 @@
+概念：
+HDFS：分布式文件系统
+	namenode：管理文件系统的命名空间，(1)管理元数据(件名、存放路径、备份个数等)  (2)维护目录树 (3)响应客户请求
+	datanode：负责存储和检索数据块，定期向namenode发送他们所存储的块(block)的列表
+	secondNameNode：定时对namenode进行冷备份，从nn获得fsimage和edits把二者重新合并然后发给nn
+	心跳机制：主节点和从节点之间的通信是通过心跳机制（心跳实际上是一个RPC函数）实现的
+	数据损坏：Datanode在把数据实际存储之前会验证数据的校验和，
+			每次读的时候，计算checksum值，和原有的checksum比较，如果不对，则表示数据损坏
+	Flume：是一个将大规模流数据导入HDFS的工具，典型应用是日志数据收集
+	Sqoop：将数据从结构化存储设备批量导入HDFS的工具。
+	distcp：并行复制，分布式复制程序，典型应用是两个HDFS集群之间的数据传输（相同版本）
+			用法：hadoop distcp hdfs://namenode1/foo hdfs://namenode2/bar，
+					默认跳过已存在文件，通过-overwrite覆盖，-update选择有改动的文件
+	archive：hadoop存档工具，可以把多个文件归档成为一个文件，归档的文件大小其实没有变化，只是压缩了文件的元数据大小
+			用法：hadoop archive -archiveName xx.har /my/files /my   #/my/files源文件树  /my是har文件存放目录
+			递归方式查询存档文件：hadoop fs -lsr har:///my/xx.har
+			删除存档：hadoop fs -rmr /my/xx.har
+			不足：新建存档会创建原始文件的副本，存档文件不能修改， 可以作为mapreduce的输入，但仍然是低效的
+MapReduce：分布式并行计算技术
+	combiner: 对map端的输出先做一次合并，以减少在map和reduce节点之间的数据传输量，提高网络IO性能,
+			不适合做数据求均值计算
+	作业调度器：
+		FIFO调度器：队列调度算法来运行作业
+		公平调度器：“让每个用户共享集群”
+		容器调度器：针对多用户调度，每个队列被分配有一定的容量
+		shuffle：系统对map的输出执行按键排序的过程（即将map的输出作为输入传给recude）
+yarn：资源协调者，将JobTracker的两个主要功能（资源管理和作业调度/监控）分离，将JobTracker和TaskTracker进行分离
+	包括ApplicationMaster(AM),ResourceManager(RM),NodeManager(NM)
+Pig: 是一种编程语言，用于大型数据集的处理，让HADOOP能使用更丰富的数据结构，专心于数据及业务本身，
+		而不是纠结于数据的格式转换以及MapReduce程序的编写
+	Pig赋予开发人员在大数据集领域更多的灵活性，并允许开发简洁的脚本用于转换数据流以便嵌入到较大的应用程序。
+		Pig相比Hive相对轻量，它主要的优势是相比于直接使用Hadoop Java APIs可大幅削减代码量。
+	Pig对mapreduce算法(框架)实现了一套shell脚本 ，类似我们通常熟悉的SQL语句，在Pig中称之为Pig Latin，
+		在这套脚本中我们可以对加载出来的数据进行排序、过滤、求和、分组(group by)、关联(Joining)，用来写一些即时脚本
+	应用场景：用简单的代码实现mapreduce，提升开发效率，是不太擅长java的程序员的福音
+Hive: 基于Hadoop的一个数据仓库工具，可以将结构化的数据文件映射为一张数据库表，并提供sql查询功能，
+		可以将sql语句转换为MapReduce任务进行运行,不必开发专门的mapreduce应用，
+		最佳使用场合是大数据集的批处理作业，适合数据仓库的统计分析.
+Hbase: 是一个分布式的、面向列的开源数据库，非结构化数据存储的数据库，列存储模式，适合实时查询.
+Zookeeper: 分布式协调服务,Hadoop和Hbase的重要组件,
+		目标就是封装好复杂易出错的关键服务，将简单易用的接口和性能高效、功能稳定的系统提供给用户.
+sqoop：用于在Hadoop(Hive)与传统的数据库(mysql、postgresql...)间进行数据的传递
+spark: 为大规模数据处理而设计的快速通用的计算引擎,启用了内存分布数据集，提供交互式查询,优化迭代工作负载，
+		数据处理速度较快，弥补了mapreduce的不足
+	1.每一个作业独立调度，可以把所有的作业做一个图进行调度，各个作业之间相互依赖，在调度过程中一起调度，速度快。
+	2.所有过程都基于内存，所以通常也将Spark称作是基于内存的迭代式运算框架。
+	3.spark提供了更丰富的算子，让操作更方便。
+	4.更容易的API：支持Python，Scala和Java
+hive on spark: 把spark作为hive的计算引擎，将hive的查询作为spark的任务提交到spark集群上进行计算，提高hive查询性能
+storm: 是一个分布式的，可靠的，容错的数据流处理系统,通过Apache ZooKeeper管理分布式环境和集群状态,适合实时计算
+		Hadoop和Storm框架用于分析大数据。两者互补，Hadoop在所有方面都很好，但滞后于实时计算, 而storm刚好补充了实时流处理
+
+
+Hive和RDBMS的区别：
+1、hive使用HDFS存储数据文件，RDBMS使用服务器本地文件系统存储数据文件
+2、hive使用的计算模型是mapreduce，RDBMS使用自己的计算模型
+3、hive是为海量数据分析处理设计的，实时性差；RDBMS是为实时业务查询设计的
+4、hive容易扩展自己的存储能力和计算能力。
+注：Hive也可以在hadoop做实时查询上做一份自己的贡献，那就是和hbase集成，hbase可以进行快速查询，
+		但是hbase不支持类SQL的语句，那么此时hive可以给hbase提供sql语法解析的外壳，可以用类sql语句操作hbase数据库。
+sql上的区别：
+1、HIVE是带余数除，可用CAST(表达式 AS INT)转换
+2、hive求余符为 % ，如 age % 2 
+3、hive不支持delete和update，但可用insert overwrite table 实现
+4、hive不支持选择字段插入
+5、建表：char/varchar 对应 string
+6、查看表结构：desc <tbname> / show create table <tbname>
+
+
+第二章 关于MapReduce:
+1、数据流：partitioner：mapreduce 数据分片
+2、combiner: 对map的输出做合并，减少网络数据传输量
+3、Hadoop Streaming : 使用Unix标准流作为hadoop和应用程序之间的接口，
+		允许使用任何编程语言通过标准输入/输出来写MapReduce程序		
+4、Hadoop Pipes : 是mapreduce的C++接口名称，使用套接字作为tasktracker与C++版本mapreduce进程之间的通道
+
+第三章 Hadoop分布式文件系统
+1、FSDataInputStream：seek()可以移动文件中任意一个绝对位置，但开销高，建议使用流数据构建应用的访问模式
+	 FSDataOutputStream不支持seek()，因为不支持在除文件末尾之外的地方进行写入
+2、文件复制进度控制：
+		OutputStream out = fs.create(new Path(dst),new Progressable(){public void progress(){System.out.print(".");} })
+3、目录：通过mkdirs(Path f)创建，通常不需要显示创建，create()写入文件时会自动创建父目录
+4、FileStatus封装了文件和目录的元数据
+		检查文件或目录是否存在：exists()
+		列出文件：listStatus()
+		通配符查找文件信息：globStatus(Path pathPattern)
+		删除文件：delete()
+
+第四章 Hadoop的I/O操作：
+1、常用的错误检测码是CRC-32(循环冗余校验)，由输入计算得到32位数字，校验和验证日志保存在datanode中
+		数据块检错到错误后，namenode将这个数据块副本标志为已损坏，并安排该数据块的另一个正常副本复制到datanode中，
+		此后，已损坏的数据块副本会被删除
+2、LocalFileSystem会计算校验和，底层文件系统本身支持校验和时可用RawLocalFileSystem替代(不会进行校验和计算)		
+3、压缩：减少存储文件所需空间，加速数据在网络和磁盘的传输效率，主要有Gzip(.gzip),bzip2(.bzp),LZO(.lzo)
+		以上压缩工具均提供9个选项：1为优化压缩速率，9为优化压缩空间 ：gzip -1 file
+		bzip2压缩能力强，但压缩速度慢，LZO压缩速度快，但压缩能力弱，gzip压缩能力和速度居中
+		支持切分的压缩格式：bzip2，LZO（通过索引实现切分）
+4.3 序列化：
+	应用场景：进程间通信，永久存储
+	1、writable  RawComparator允许直接对数据流进行比较

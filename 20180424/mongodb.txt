@@ -1,0 +1,153 @@
+MongoDB: 基于分布式文件存储的非关系型数据库
+
+帮助文档：http://www.runoob.com/mongodb/mongodb-tutorial.html
+远程连接：mongo 39.108.215.145:27017
+
+客户场景：
+	1、用于服务器的日志记录，查找起来比文本灵活，导出也很方便
+	2、用于第三方信息的获取或者抓取，因为mongodb格式灵活
+	3、用来存储一些监控数据
+行业应用：
+	1、游戏场景：使用 MongoDB 存储游戏用户信息，用户的装备、积分等直接以内嵌文档的形式存储，方便查询、更新
+	2、物流场景：使用 MongoDB 存储订单信息，订单状态在运送过程中会不断更新，以 MongoDB 内嵌数组的形式来存储，
+			一次查询就能将订单所有的变更读取出来。
+	3、社交场景：使用 MongoDB 存储存储用户信息，以及用户发表的朋友圈信息，通过地理位置索引实现附近的人、地点等功能
+	4、物联网场景：使用 MongoDB 存储所有接入的智能设备信息，以及设备汇报的日志信息，并对这些信息进行多维度的分析
+	5、视频直播：使用 MongoDB 存储用户信息、礼物信息等
+
+RDBMS 与 MongoDB 对应： 
+	数据库对应数据库，表对应集合，行对应文档，字段对应域，索引对应索引，表连接对应嵌入文档，_id为mongodb主键
+MongoDB Shell 是一个JavaScript shell，取日期：>Date()
+创建数据库：use <dbname>
+查看当前数据库：db
+查看所有数据库：show dbs
+删除当前数据库：db.dropDatabase()
+在 MongoDB 中，你不需要创建集合。当你插入一些文档时，MongoDB 会自动创建集合。
+--创建集合：db.createCollection("runoob") /  
+		db.createCollection("mycol", { capped : true, autoIndexId : true, size : 6142800, max : 10000 } )
+查看集合：show tables / show collections
+删除集合：db.<collection>.drop()
+插入文档：db.<collection>.insert(<document>)  
+	document=({title: 'MongoDB 教程', 
+    description: 'MongoDB 是一个 Nosql 数据库',
+    by: '菜鸟教程',
+    url: 'http://www.runoob.com',
+    tags: ['mongodb', 'database', 'NoSQL'],
+    likes: 100
+	});
+插入单条：db.collection.insertOne({"a": 3})
+插入多条：db.collection.insertMany([{"b":3},{"c":4}])
+插入文档（更新文档）可以使用 db.col.save(document) 命令。如果不指定 _id 字段 save() 方法类似于 insert() 方法。
+		如果指定 _id 字段，则会更新该 _id 的数据。
+更新文档：db.col.update({'title':'MongoDB 教程'},{$set:{'title':'MongoDB'}})
+更新文档（多条）：db.col.update({'title':'MongoDB 教程'},{$set:{'title':'MongoDB'}},{multi:true})
+更新一条：db.test_collection.updateOne({"name":"abc"},{$set:{"age":"28"}})
+更新多条：db.test_collection.updateMany({"age":{$gt:"10"}},{$set:{"status":"xyz"}})
+删除文档：
+	删除一条：db.col.deleteOne({"title":"MongoDB 教程"})
+	按条件全部删除：db.col.deleteMany({"title":"MongoDB 教程"})
+	全部删除：db.col.deleteMany({})
+	(过时)删除一条：db.col.remove({"title":"MongoDB 教程"},1)
+	(过时)按条件全部删除：db.col.remove({"title":"MongoDB 教程"})
+	(过时)全部删除：db.col.remove({})
+查询文档：
+	查看文档：db.<docname>.find()  /   db.col.find({"title":"MongoDB 教程","likes":{$gte:50}})
+		条件操作符：$gt,$gte,$lt,$lte,$ne     #gt:greater than , lt:less than
+		字段类型$type操作符：db.col.find({"title":{$type:2}},{"title":1})   #$type,1:double,2:String
+				参考：www.runoob.com/mongodb/mongodb-operators-type.html
+		条件“or”的用法：db.col.find({"likes":{$gte:50},$or:[{"by":"菜鸟教程"},{"title":"MongoDB 教程"}]})
+	查看文档（一条）：db.col.findOne({"title" : "MongoDB 教程"})
+	查看文档（美化）: db.<docname>.find().pretty()
+	查询部分字段：db.col.find({},{"title":1,"likes":1})
+	查询除部分字段外的所有字段：db.col.find({},{"title":0,"likes":0})
+	隐藏ID：db.col.find({},{"_id":0,"title":1,"likes":1})
+	limit: db.col.find().limit(2)	
+	skip: db.col.find().skip(1).limit(2)   #相当于sql的limit(1,2)
+	sort: db.col.find().sort({"likes":1})   # 1 升序  -1 降序
+		注：当查询时同时使用sort,skip,limit，无论位置先后，最先执行顺序 sort再skip再limit。
+索引：
+	创建索引：db.col.ensureIndex({"title":1})  # 1 升序 -1 降序
+聚合：aggregate(类似sql的count()函数)：db.col.aggregate([{$group:{"_id":"$by","cnt":{$sum:1}}}])
+	管道操作符：db.col.aggregate({$project:{"_id":0,"title":1,"by_user":1}})
+		先match过滤再group：db.col.aggregate([{$match:{"likes":{$gte:100}}},{$group:{"_id":"$title","count":{$sum:1}}}])
+mongodb备份：mongodump -h 127.0.0.1 -d test -o "f:\dump"
+mongodb恢复数据：mongorestore -h <hostname><:port> -d dbname <path> 
+	如：mongorestore -h 127.0.0.1 -d test2 "f:\dump\test"
+mongodb状态监控：mongostat / mongotop
+
+java:
+	连接服务：MongoClient mongoClient = new MongoClient( "localhost" , 27017 );
+	连接数据库：MongoDatabase mongoDatabase = mongoClient.getDatabase("mycol");
+	创建集合：mongoDatabase.createCollection("javatest1");
+	获取集合：MongoCollection<Document> collection =  mongoDatabase.getCollection("javatest1");
+	插入文档：
+		Document document = new Document("title","MongoDB").append("description","database");
+		List<Document> documents = new ArrayList<Document>();
+		documents.add(document);
+		collection.insertMany(documents);
+	查看文档：
+		FindIterable<Document> iterable = collection.find();
+		MongoCursor<Document> cursor = iterable.iterator();
+		while (cursor.hasNext()){ System.out.println(cursor.next()); }
+	更新文档： collection.updateMany(Filters.eq("title","MongoDB"),new Document("$set",new Document("likes",300)));
+	删除文档：collection.deleteOne(Filters.eq("title","MongoDB"));
+			collection.deleteMany(new Document());    //全部删除
+
+查询分析：
+	explain: db.col.find().explain()
+	hint(): 指定查询使用的索引，如 db.col.find().hint({"title":1}).explain()		
+	
+原子操作：
+	$set：更新值
+	$unset：删除值
+	$inc：对数字型值进行增减
+	$push：添加到数组
+	$pull：从数组中删除
+	$pop：删除数组第一个或最后一个元素
+
+子文档索引：db.users.ensureIndex({"address.city":1,"address.state":1,"address.pincode":1})
+
+mapReduce:
+	db.posts.mapReduce(
+		function(){ emit(this.user_name,1);},
+		function(key,values){ return Array.sum(values)},
+		{
+			query:{"status":"active"},
+			out:"post_total"
+		}
+	)
+	
+全文检索：
+	启用全文检索：db.adminCommand({setParameter:true,textSearchEnabled:true}) 或 mongo --setParameter textSearchEnabled=true
+	创建全文检索：db.posts.ensureIndex({post_text:"text"})
+	使用全文检索：db.posts.find({$text:{$search:"runoob"}})
+	删除全文检索：db.posts.dropIndex("post_text_text")
+	
+正则表达式：
+	用法(数组用法相同)：db.posts.find({"user_name":/runoob/})  或 db.posts.find({"user_name":{$regex:"ma"}})
+	不区分大小写：db.posts.find({"user_name":{$regex:"MA",$options:"$i"}})
+	正则表达式中使用变量: title:eval("/"+title+"/i")    // 等同于 title:{$regex:title,$Option:"$i"}  
+			如：var username="mar"   db.posts.find({"user_name":eval("/"+username+"/si")})
+	$i:忽略大小写，$m:匹配多行, $x:忽略非转义的空白字符  $s:单行匹配模式，(.)会匹配到换行符
+	
+MongoDB 管理工具: Rockmongo、robomongo
+
+MongoDB GridFS(文件操作):
+	GridFS 用于存储和恢复那些超过16M（BSON文件限制）的文件(如：图片、音频、视频等),
+		将大文件对象分割成多个小的chunk(文件片段),一般为256k/个,每个chunk将作为MongoDB的一个文档被存储在chunks集合中
+		用两个集合来存储一个文件：fs.files(和文件有关的meta数据)与fs.chunks
+	添加文件:  mongofiles.exe -d gridfs put song.mp3
+	查询文件(注意数据库)：db.fs.files.find() ， db.fs.chunks.find({files_id:ObjectId('534a811bf8b4aa4d33fdf94d')})
+	列出文件：mongofiles -d testfile list
+	取出文件：mongofiles -d testfile get a.txt
+	索引：db.fs.chunks.ensureIndex({files_id:1, n:1}, {unique: true})
+	获得第一个块：db.fs.chunks.findOne({files_id: myFileID, n: 0})
+
+MongoDB 固定集合：集合空间固定，当集合空间用完后，再插入的元素就会覆盖最初始的头部的元素
+	创建固定集合：db.createCollection("document1",{capped:true,size:10000,max:1000})  # max指定文档个数
+	判断集合是否为固定集合：db.document1.isCapped()
+	将已存在的集合转为固定集合：db.runCommand({"convertToCapped":"posts",size:10000})
+	查询：db.document1.find().sort({$natural:-1})
+	特点：固定集合不能删除文档，可以删除集合并重建
+	用处：1、存储日志信息   2、缓存一些少量的文档
+
